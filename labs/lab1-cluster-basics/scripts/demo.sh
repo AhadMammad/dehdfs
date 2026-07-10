@@ -9,7 +9,7 @@ h() { $COMPOSE exec -T "$NN" "$@"; }
 say() { printf '\n\033[1;34m# %s\033[0m\n' "$*"; }
 
 say "Who is in the cluster? (NameNode + DataNodes, capacity, live nodes)"
-h hdfs dfsadmin -report | head -n 20
+h hdfs dfsadmin -report | head -n 20 || true
 
 say "The namespace starts basically empty. Make a directory tree:"
 h hdfs dfs -mkdir -p /demo/input
