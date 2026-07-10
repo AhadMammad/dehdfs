@@ -1,0 +1,38 @@
+# Lab 1 — the smallest possible HDFS cluster: one NameNode + one DataNode.
+# The NameNode holds the namespace (metadata); the DataNode stores the actual block data.
+
+name: dehdfs-lab1
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab1-namenode
+    hostname: namenode
+    environment:
+      - CLUSTER_NAME=dehdfs-lab1
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9870:9870"   # NameNode web UI
+      - "9000:9000"   # NameNode RPC (fs.defaultFS)
+    volumes:
+      - namenode:/hadoop/dfs/name
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab1-datanode
+    hostname: datanode
+    depends_on:
+      - namenode
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9864:9864"   # DataNode web UI
+    volumes:
+      - datanode:/hadoop/dfs/data
+
+volumes:
+  namenode:
+  datanode:

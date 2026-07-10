@@ -1,0 +1,37 @@
+# Lab 5 — WebHDFS REST API + quotas + trash: 1 NameNode + 1 DataNode.
+
+name: dehdfs-lab5
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab5-namenode
+    hostname: namenode
+    environment:
+      - CLUSTER_NAME=dehdfs-lab5
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9870:9870"   # NameNode UI + WebHDFS endpoint
+      - "9000:9000"
+    volumes:
+      - namenode:/hadoop/dfs/name
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab5-datanode
+    hostname: datanode
+    depends_on:
+      - namenode
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9864:9864"   # DataNode UI + WebHDFS data transfer
+    volumes:
+      - datanode:/hadoop/dfs/data
+
+volumes:
+  namenode:
+  datanode:

@@ -1,0 +1,64 @@
+# Lab 3 — DataNode failure & recovery: 1 NameNode + 4 DataNodes, replication=3.
+# With 4 nodes and replication 3, killing ONE node leaves a spare the NameNode can
+# re-replicate onto, so you can watch the cluster heal itself back to full replication.
+
+name: dehdfs-lab3
+
+x-datanode: &datanode
+  image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+  env_file:
+    - ./hadoop.env
+  environment:
+    - SERVICE_PRECONDITION=namenode:9870
+  depends_on:
+    - namenode
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab3-namenode
+    hostname: namenode
+    environment:
+      - CLUSTER_NAME=dehdfs-lab3
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - namenode:/hadoop/dfs/name
+
+  datanode1:
+    <<: *datanode
+    container_name: dehdfs-lab3-datanode1
+    hostname: datanode1
+    volumes:
+      - datanode1:/hadoop/dfs/data
+
+  datanode2:
+    <<: *datanode
+    container_name: dehdfs-lab3-datanode2
+    hostname: datanode2
+    volumes:
+      - datanode2:/hadoop/dfs/data
+
+  datanode3:
+    <<: *datanode
+    container_name: dehdfs-lab3-datanode3
+    hostname: datanode3
+    volumes:
+      - datanode3:/hadoop/dfs/data
+
+  datanode4:
+    <<: *datanode
+    container_name: dehdfs-lab3-datanode4
+    hostname: datanode4
+    volumes:
+      - datanode4:/hadoop/dfs/data
+
+volumes:
+  namenode:
+  datanode1:
+  datanode2:
+  datanode3:
+  datanode4:

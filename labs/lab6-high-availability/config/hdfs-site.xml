@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!-- Lab 6 HA hdfs-site.xml: two NameNodes (nn1/nn2) over a 3-node JournalNode quorum,
+     with automatic failover driven by ZooKeeper + ZKFC. -->
+<configuration>
+
+  <!-- The logical nameservice and the two NameNodes that back it. -->
+  <property>
+    <name>dfs.nameservices</name>
+    <value>mycluster</value>
+  </property>
+  <property>
+    <name>dfs.ha.namenodes.mycluster</name>
+    <value>nn1,nn2</value>
+  </property>
+
+  <!-- RPC + HTTP addresses for each NameNode. -->
+  <property>
+    <name>dfs.namenode.rpc-address.mycluster.nn1</name>
+    <value>nn1:8020</value>
+  </property>
+  <property>
+    <name>dfs.namenode.rpc-address.mycluster.nn2</name>
+    <value>nn2:8020</value>
+  </property>
+  <property>
+    <name>dfs.namenode.http-address.mycluster.nn1</name>
+    <value>nn1:9870</value>
+  </property>
+  <property>
+    <name>dfs.namenode.http-address.mycluster.nn2</name>
+    <value>nn2:9870</value>
+  </property>
+
+  <!-- Shared edit log: both NameNodes read/write the journal held by the JournalNode quorum.
+       This is how the standby stays byte-for-byte in sync with the active. -->
+  <property>
+    <name>dfs.namenode.shared.edits.dir</name>
+    <value>qjournal://jn1:8485;jn2:8485;jn3:8485/mycluster</value>
+  </property>
+  <property>
+    <name>dfs.journalnode.edits.dir</name>
+    <value>/hadoop/dfs/journal</value>
+  </property>
+
+  <!-- Clients use this proxy provider to find whichever NameNode is currently active. -->
+  <property>
+    <name>dfs.client.failover.proxy.provider.mycluster</name>
+    <value>org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider</value>
+  </property>
+
+  <!-- Automatic failover: ZKFC watches ZooKeeper and promotes the standby when the active dies. -->
+  <property>
+    <name>dfs.ha.automatic-failover.enabled</name>
+    <value>true</value>
+  </property>
+  <!-- Fencing: since a stopped container is genuinely gone, a no-op fence is safe for this lab. -->
+  <property>
+    <name>dfs.ha.fencing.methods</name>
+    <value>shell(/bin/true)</value>
+  </property>
+
+  <!-- Storage directories. -->
+  <property>
+    <name>dfs.namenode.name.dir</name>
+    <value>file:///hadoop/dfs/name</value>
+  </property>
+  <property>
+    <name>dfs.datanode.data.dir</name>
+    <value>file:///hadoop/dfs/data</value>
+  </property>
+
+  <property>
+    <name>dfs.replication</name>
+    <value>3</value>
+  </property>
+  <property>
+    <name>dfs.permissions.enabled</name>
+    <value>false</value>
+  </property>
+</configuration>

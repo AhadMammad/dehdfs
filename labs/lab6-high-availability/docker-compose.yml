@@ -1,0 +1,124 @@
+# Lab 6 — High Availability: two NameNodes (active/standby) over a 3-node JournalNode
+# quorum, with ZooKeeper + ZKFC driving automatic failover, plus 3 DataNodes.
+#
+# All Hadoop roles share one image and one entrypoint script; $HA_ROLE selects behaviour.
+
+name: dehdfs-lab6
+
+x-hadoop: &hadoop
+  image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+  entrypoint: ["/bin/bash", "/ha/entrypoint.sh"]
+  environment:
+    - HADOOP_CONF_DIR=/etc/hadoop
+  volumes:
+    - ./config/core-site.xml:/etc/hadoop/core-site.xml:ro
+    - ./config/hdfs-site.xml:/etc/hadoop/hdfs-site.xml:ro
+    - ./scripts/ha-entrypoint.sh:/ha/entrypoint.sh:ro
+
+services:
+  zookeeper:
+    image: zookeeper:3.6
+    container_name: dehdfs-lab6-zookeeper
+    hostname: zookeeper
+
+  jn1:
+    <<: *hadoop
+    container_name: dehdfs-lab6-jn1
+    hostname: jn1
+    environment: [HA_ROLE=journalnode, HADOOP_CONF_DIR=/etc/hadoop]
+    volumes:
+      - ./config/core-site.xml:/etc/hadoop/core-site.xml:ro
+      - ./config/hdfs-site.xml:/etc/hadoop/hdfs-site.xml:ro
+      - ./scripts/ha-entrypoint.sh:/ha/entrypoint.sh:ro
+      - jn1:/hadoop/dfs/journal
+  jn2:
+    <<: *hadoop
+    container_name: dehdfs-lab6-jn2
+    hostname: jn2
+    environment: [HA_ROLE=journalnode, HADOOP_CONF_DIR=/etc/hadoop]
+    volumes:
+      - ./config/core-site.xml:/etc/hadoop/core-site.xml:ro
+      - ./config/hdfs-site.xml:/etc/hadoop/hdfs-site.xml:ro
+      - ./scripts/ha-entrypoint.sh:/ha/entrypoint.sh:ro
+      - jn2:/hadoop/dfs/journal
+  jn3:
+    <<: *hadoop
+    container_name: dehdfs-lab6-jn3
+    hostname: jn3
+    environment: [HA_ROLE=journalnode, HADOOP_CONF_DIR=/etc/hadoop]
+    volumes:
+      - ./config/core-site.xml:/etc/hadoop/core-site.xml:ro
+      - ./config/hdfs-site.xml:/etc/hadoop/hdfs-site.xml:ro
+      - ./scripts/ha-entrypoint.sh:/ha/entrypoint.sh:ro
+      - jn3:/hadoop/dfs/journal
+
+  nn1:
+    <<: *hadoop
+    container_name: dehdfs-lab6-nn1
+    hostname: nn1
+    depends_on: [zookeeper, jn1, jn2, jn3]
+    environment: [HA_ROLE=namenode, NN_ID=nn1, HADOOP_CONF_DIR=/etc/hadoop]
+    ports:
+      - "9870:9870"   # nn1 web UI
+    volumes:
+      - ./config/core-site.xml:/etc/hadoop/core-site.xml:ro
+      - ./config/hdfs-site.xml:/etc/hadoop/hdfs-site.xml:ro
+      - ./scripts/ha-entrypoint.sh:/ha/entrypoint.sh:ro
+      - nn1:/hadoop/dfs/name
+  nn2:
+    <<: *hadoop
+    container_name: dehdfs-lab6-nn2
+    hostname: nn2
+    depends_on: [zookeeper, jn1, jn2, jn3, nn1]
+    environment: [HA_ROLE=namenode, NN_ID=nn2, HADOOP_CONF_DIR=/etc/hadoop]
+    ports:
+      - "9871:9870"   # nn2 web UI
+    volumes:
+      - ./config/core-site.xml:/etc/hadoop/core-site.xml:ro
+      - ./config/hdfs-site.xml:/etc/hadoop/hdfs-site.xml:ro
+      - ./scripts/ha-entrypoint.sh:/ha/entrypoint.sh:ro
+      - nn2:/hadoop/dfs/name
+
+  dn1:
+    <<: *hadoop
+    container_name: dehdfs-lab6-dn1
+    hostname: dn1
+    depends_on: [nn1, nn2]
+    environment: [HA_ROLE=datanode, HADOOP_CONF_DIR=/etc/hadoop]
+    volumes:
+      - ./config/core-site.xml:/etc/hadoop/core-site.xml:ro
+      - ./config/hdfs-site.xml:/etc/hadoop/hdfs-site.xml:ro
+      - ./scripts/ha-entrypoint.sh:/ha/entrypoint.sh:ro
+      - dn1:/hadoop/dfs/data
+  dn2:
+    <<: *hadoop
+    container_name: dehdfs-lab6-dn2
+    hostname: dn2
+    depends_on: [nn1, nn2]
+    environment: [HA_ROLE=datanode, HADOOP_CONF_DIR=/etc/hadoop]
+    volumes:
+      - ./config/core-site.xml:/etc/hadoop/core-site.xml:ro
+      - ./config/hdfs-site.xml:/etc/hadoop/hdfs-site.xml:ro
+      - ./scripts/ha-entrypoint.sh:/ha/entrypoint.sh:ro
+      - dn2:/hadoop/dfs/data
+  dn3:
+    <<: *hadoop
+    container_name: dehdfs-lab6-dn3
+    hostname: dn3
+    depends_on: [nn1, nn2]
+    environment: [HA_ROLE=datanode, HADOOP_CONF_DIR=/etc/hadoop]
+    volumes:
+      - ./config/core-site.xml:/etc/hadoop/core-site.xml:ro
+      - ./config/hdfs-site.xml:/etc/hadoop/hdfs-site.xml:ro
+      - ./scripts/ha-entrypoint.sh:/ha/entrypoint.sh:ro
+      - dn3:/hadoop/dfs/data
+
+volumes:
+  jn1:
+  jn2:
+  jn3:
+  nn1:
+  nn2:
+  dn1:
+  dn2:
+  dn3:

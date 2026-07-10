@@ -1,0 +1,55 @@
+# Lab 2 — blocks & replication: one NameNode + THREE DataNodes.
+# With dfs.replication=3, every block is stored on all three DataNodes.
+
+name: dehdfs-lab2
+
+x-datanode: &datanode
+  image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+  env_file:
+    - ./hadoop.env
+  environment:
+    - SERVICE_PRECONDITION=namenode:9870
+  depends_on:
+    - namenode
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab2-namenode
+    hostname: namenode
+    environment:
+      - CLUSTER_NAME=dehdfs-lab2
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - namenode:/hadoop/dfs/name
+
+  datanode1:
+    <<: *datanode
+    container_name: dehdfs-lab2-datanode1
+    hostname: datanode1
+    volumes:
+      - datanode1:/hadoop/dfs/data
+
+  datanode2:
+    <<: *datanode
+    container_name: dehdfs-lab2-datanode2
+    hostname: datanode2
+    volumes:
+      - datanode2:/hadoop/dfs/data
+
+  datanode3:
+    <<: *datanode
+    container_name: dehdfs-lab2-datanode3
+    hostname: datanode3
+    volumes:
+      - datanode3:/hadoop/dfs/data
+
+volumes:
+  namenode:
+  datanode1:
+  datanode2:
+  datanode3:

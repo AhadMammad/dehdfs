@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HDFS Explained — the Hadoop Distributed File System</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#111c33; --ink:#e5eaf3; --muted:#9fb0c9; --line:#22304d;
+    --accent:#38bdf8; --accent2:#a78bfa; --good:#34d399; --warn:#fbbf24; --bad:#f87171;
+    --code:#0b1120;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{display:grid; grid-template-columns:260px 1fr; max-width:1200px; margin:0 auto; gap:0}
+  nav{
+    position:sticky; top:0; align-self:start; height:100vh; overflow:auto;
+    padding:26px 18px; border-right:1px solid var(--line); background:var(--panel);
+  }
+  nav h1{font-size:18px; margin:0 0 4px}
+  nav .sub{color:var(--muted); font-size:12px; margin-bottom:18px}
+  nav ol{list-style:none; padding:0; margin:0; counter-reset:s}
+  nav ol li{counter-increment:s; margin:2px 0}
+  nav ol li a{display:block; padding:5px 8px; border-radius:7px; color:var(--muted); font-size:13.5px}
+  nav ol li a:hover{background:#16233d; color:var(--ink); text-decoration:none}
+  nav ol li a::before{content:counter(s) ". "; color:var(--accent2)}
+  main{padding:38px 46px; max-width:900px}
+  header.hero{margin-bottom:26px}
+  header.hero h1{font-size:34px; margin:0 0 8px; letter-spacing:-.5px}
+  header.hero p{color:var(--muted); font-size:17px; margin:0}
+  section{margin:0 0 46px; padding-top:14px; border-top:1px solid var(--line)}
+  section:first-of-type{border-top:none}
+  h2{font-size:24px; margin:8px 0 6px}
+  h3{font-size:17px; margin:24px 0 6px; color:var(--accent)}
+  p{margin:10px 0}
+  .lead{font-size:17px; color:#cdd8ec}
+  code{background:var(--code); padding:2px 6px; border-radius:5px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13.5px; color:#a5f3fc}
+  pre{background:var(--code); border:1px solid var(--line); border-radius:10px; padding:14px 16px; overflow:auto}
+  pre code{background:none; padding:0; color:#cbe6ff}
+  .fig{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; margin:18px 0}
+  .fig svg{display:block; width:100%; height:auto}
+  .fig .cap{color:var(--muted); font-size:13px; margin-top:8px; text-align:center}
+  .cards{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:14px 0}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px}
+  .card b{color:var(--accent2)}
+  .note{border-left:3px solid var(--accent); background:#0d1a30; padding:10px 14px; border-radius:0 8px 8px 0; margin:14px 0; color:#cdd8ec}
+  .warn{border-left:3px solid var(--warn); background:#241f0d}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:14px}
+  th,td{border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top}
+  th{background:#16233d; color:var(--ink)}
+  td code{white-space:nowrap}
+  .pill{display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; background:#16233d; color:var(--accent); border:1px solid var(--line)}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-top:6px; justify-content:center}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .sw{width:12px; height:12px; border-radius:3px; display:inline-block}
+  footer{color:var(--muted); font-size:13px; border-top:1px solid var(--line); padding-top:18px; margin-top:30px}
+  @media (max-width:820px){ .wrap{grid-template-columns:1fr} nav{position:static; height:auto} main{padding:24px} .cards{grid-template-columns:1fr} }
+  /* SVG text defaults */
+  text{fill:#dbe6fa; font-family:ui-monospace,Menlo,monospace; font-size:13px}
+  .lbl{fill:#9fb0c9; font-size:12px}
+  .tt{fill:#eaf2ff; font-weight:bold}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <h1>HDFS</h1>
+  <div class="sub">The Hadoop Distributed File System — how it works & why</div>
+  <ol>
+    <li><a href="#why">Why HDFS exists</a></li>
+    <li><a href="#arch">Architecture: NameNode &amp; DataNodes</a></li>
+    <li><a href="#blocks">Blocks</a></li>
+    <li><a href="#replication">Replication &amp; rack awareness</a></li>
+    <li><a href="#paths">The write &amp; read paths</a></li>
+    <li><a href="#fault">Fault tolerance &amp; self-healing</a></li>
+    <li><a href="#metadata">Metadata durability</a></li>
+    <li><a href="#interfaces">Interfaces: shell &amp; WebHDFS</a></li>
+    <li><a href="#space">Quotas, trash &amp; permissions</a></li>
+    <li><a href="#scale">Availability &amp; scaling out</a></li>
+    <li><a href="#limits">Limitations: when NOT to use HDFS</a></li>
+    <li><a href="#labmap">Concept → Lab map</a></li>
+  </ol>
+</nav>
+<main>
+  <header class="hero">
+    <h1>HDFS, explained</h1>
+    <p>A fact-based tour of the storage layer that made "big data" practical — the ideas that matter,
+       how they actually work, and why each one exists. Every concept here has a matching hands-on lab.</p>
+  </header>
+
+  <!-- 1. WHY -->
+  <section id="why">
+    <h2>1. Why HDFS exists</h2>
+    <p class="lead">HDFS stores <b>very large files</b> reliably across a cluster of <b>ordinary,
+      failure-prone machines</b>, and streams them at high throughput to data-processing jobs.</p>
+    <p>It was designed (following Google's GFS paper) around a specific, deliberate set of assumptions.
+      Those assumptions explain almost every design choice that follows:</p>
+    <div class="cards">
+      <div class="card"><b>Hardware fails, constantly.</b> With thousands of disks, something is always
+        broken. Fault tolerance must be built into the software, not bought in the hardware.</div>
+      <div class="card"><b>Files are huge.</b> Gigabytes to terabytes each. The system is tuned for a
+        modest number of large files, not billions of tiny ones.</div>
+      <div class="card"><b>Write once, read many.</b> Data is typically written once (or appended) and
+        then read many times by batch jobs. No need for random in-place edits.</div>
+      <div class="card"><b>Throughput &gt; latency.</b> Scanning a whole dataset fast matters more than
+        fetching one record quickly. HDFS optimises for streaming bandwidth.</div>
+      <div class="card"><b>Move computation to data.</b> Shipping a small program to where the data lives
+        beats dragging terabytes across the network to the program.</div>
+      <div class="card"><b>Commodity scale-out.</b> Grow capacity by adding cheap nodes, not by buying a
+        bigger, pricier server.</div>
+    </div>
+    <div class="note">If your workload wants low-latency random reads, tiny files, or frequent in-place
+      updates, HDFS is the wrong tool — see <a href="#limits">§11</a>.</div>
+  </section>
+
+  <!-- 2. ARCHITECTURE -->
+  <section id="arch">
+    <h2>2. Architecture: NameNode &amp; DataNodes</h2>
+    <p>HDFS uses a <b>master/worker</b> split with two kinds of process:</p>
+    <ul>
+      <li><b>NameNode (master)</b> — keeps all <b>metadata</b>: the directory tree, file names,
+        permissions, and the map of which <b>blocks</b> make up each file and which DataNodes hold them.
+        It holds this in RAM for speed. It never stores file <em>data</em>.</li>
+      <li><b>DataNode (worker)</b> — stores the actual <b>block</b> data on local disks and serves it to
+        clients. There are many DataNodes; each periodically tells the NameNode it is alive
+        (<b>heartbeat</b>) and what blocks it holds (<b>block report</b>).</li>
+    </ul>
+
+    <div class="fig">
+      <svg viewBox="0 0 720 300" role="img" aria-label="HDFS cluster architecture">
+        <!-- client -->
+        <rect x="20" y="130" width="120" height="46" rx="8" fill="#0d1a30" stroke="#38bdf8"/>
+        <text x="80" y="158" text-anchor="middle" class="tt">Client</text>
+        <!-- namenode -->
+        <rect x="270" y="24" width="180" height="70" rx="10" fill="#141d38" stroke="#a78bfa"/>
+        <text x="360" y="50" text-anchor="middle" class="tt">NameNode</text>
+        <text x="360" y="70" text-anchor="middle" class="lbl">namespace + block map</text>
+        <text x="360" y="85" text-anchor="middle" class="lbl">(metadata, in RAM)</text>
+        <!-- datanodes -->
+        <g>
+          <rect x="250" y="210" width="130" height="60" rx="8" fill="#0d2a22" stroke="#34d399"/>
+          <text x="315" y="234" text-anchor="middle" class="tt">DataNode 1</text>
+          <text x="315" y="253" text-anchor="middle" class="lbl">blocks on disk</text>
+          <rect x="430" y="210" width="130" height="60" rx="8" fill="#0d2a22" stroke="#34d399"/>
+          <text x="495" y="234" text-anchor="middle" class="tt">DataNode 2</text>
+          <text x="495" y="253" text-anchor="middle" class="lbl">blocks on disk</text>
+          <rect x="590" y="210" width="110" height="60" rx="8" fill="#0d2a22" stroke="#34d399"/>
+          <text x="645" y="234" text-anchor="middle" class="tt">DataNode 3</text>
+          <text x="645" y="253" text-anchor="middle" class="lbl">blocks</text>
+        </g>
+        <!-- client -> namenode (metadata) -->
+        <line x1="140" y1="150" x2="268" y2="70" stroke="#38bdf8" stroke-width="2" marker-end="url(#a)"/>
+        <text x="150" y="100" class="lbl">1. ask: where is /file?</text>
+        <!-- client -> datanode (data) -->
+        <line x1="140" y1="160" x2="248" y2="230" stroke="#38bdf8" stroke-width="2" marker-end="url(#a)"/>
+        <text x="120" y="210" class="lbl">2. read/write blocks</text>
+        <!-- datanodes -> namenode heartbeat -->
+        <line x1="330" y1="208" x2="350" y2="96" stroke="#34d399" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#g)"/>
+        <line x1="500" y1="208" x2="380" y2="96" stroke="#34d399" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#g)"/>
+        <text x="470" y="150" class="lbl" fill="#34d399">heartbeats + block reports</text>
+        <defs>
+          <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#38bdf8"/></marker>
+          <marker id="g" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#34d399"/></marker>
+        </defs>
+      </svg>
+      <div class="cap">The NameNode knows <em>where</em> everything is; DataNodes hold the bytes. Clients
+        get block locations from the NameNode, then transfer data directly with the DataNodes.</div>
+    </div>
+    <div class="note">Because the NameNode holds the whole namespace in memory, RAM on the master is the
+      practical limit on how many files/blocks a cluster can track — one reason HDFS dislikes tiny files
+      (see <a href="#limits">§11</a>).</div>
+    <p class="pill">Hands-on: Lab 1</p>
+  </section>
+
+  <!-- 3. BLOCKS -->
+  <section id="blocks">
+    <h2>3. Blocks</h2>
+    <p>HDFS does not store a file as one contiguous object. It splits every file into fixed-size
+      <b>blocks</b> (default <b>128&nbsp;MiB</b>) and stores each block independently. A 350&nbsp;MiB file
+      becomes three blocks (128 + 128 + 94).</p>
+    <h3>Why blocks are so large</h3>
+    <ul>
+      <li><b>Minimise seek overhead.</b> With big blocks, disks spend nearly all their time streaming
+        data, not seeking. Transfer time dominates; seek time becomes negligible.</li>
+      <li><b>Keep metadata small.</b> Fewer, larger blocks means fewer entries for the NameNode to track
+        in RAM.</li>
+      <li><b>Simplify the model.</b> Blocks — not files — are the unit of storage and replication, which
+        makes placement and recovery uniform.</li>
+    </ul>
+
+    <div class="fig">
+      <svg viewBox="0 0 700 170" role="img" aria-label="A file split into blocks">
+        <rect x="20" y="20" width="660" height="34" rx="6" fill="#0d1a30" stroke="#38bdf8"/>
+        <text x="350" y="42" text-anchor="middle" class="tt">big.file  (350 MiB)</text>
+        <!-- split arrows -->
+        <line x1="130" y1="54" x2="130" y2="92" stroke="#9fb0c9" stroke-dasharray="4 3"/>
+        <line x1="350" y1="54" x2="350" y2="92" stroke="#9fb0c9" stroke-dasharray="4 3"/>
+        <line x1="565" y1="54" x2="565" y2="92" stroke="#9fb0c9" stroke-dasharray="4 3"/>
+        <rect x="40"  y="96" width="180" height="46" rx="6" fill="#141d38" stroke="#a78bfa"/>
+        <text x="130" y="124" text-anchor="middle">block 0 · 128 MiB</text>
+        <rect x="260" y="96" width="180" height="46" rx="6" fill="#141d38" stroke="#a78bfa"/>
+        <text x="350" y="124" text-anchor="middle">block 1 · 128 MiB</text>
+        <rect x="480" y="96" width="170" height="46" rx="6" fill="#141d38" stroke="#a78bfa"/>
+        <text x="565" y="124" text-anchor="middle">block 2 · 94 MiB</text>
+      </svg>
+      <div class="cap">Only the last block is partially full — HDFS does not pad it to the full block size.</div>
+    </div>
+    <p class="pill">Hands-on: Lab 2</p>
+  </section>
+
+  <!-- 4. REPLICATION -->
+  <section id="replication">
+    <h2>4. Replication &amp; rack awareness</h2>
+    <p>Durability comes from <b>replication</b>: every block is copied to several DataNodes — the
+      <b>replication factor</b>, <b>3</b> by default. Lose a disk or a whole machine and every block still
+      exists elsewhere. The NameNode continuously watches replica counts and fixes any shortfall.</p>
+
+    <div class="fig">
+      <svg viewBox="0 0 700 210" role="img" aria-label="Each block replicated three times">
+        <rect x="20" y="16" width="150" height="40" rx="6" fill="#141d38" stroke="#a78bfa"/>
+        <text x="95" y="41" text-anchor="middle">block 1</text>
+        <g fill="#0d2a22" stroke="#34d399">
+          <rect x="250" y="12" width="130" height="40" rx="6"/>
+          <rect x="250" y="86" width="130" height="40" rx="6"/>
+          <rect x="250" y="160" width="130" height="40" rx="6"/>
+        </g>
+        <text x="315" y="37"  text-anchor="middle">DataNode A</text>
+        <text x="315" y="111" text-anchor="middle">DataNode B</text>
+        <text x="315" y="185" text-anchor="middle">DataNode C</text>
+        <g stroke="#38bdf8" stroke-width="2" fill="none" marker-end="url(#b)">
+          <line x1="170" y1="34" x2="248" y2="32"/>
+          <line x1="170" y1="38" x2="248" y2="106"/>
+          <line x1="170" y1="42" x2="248" y2="180"/>
+        </g>
+        <text x="430" y="37"  class="lbl" fill="#34d399">replica 1</text>
+        <text x="430" y="111" class="lbl" fill="#34d399">replica 2</text>
+        <text x="430" y="185" class="lbl" fill="#34d399">replica 3</text>
+        <defs><marker id="b" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#38bdf8"/></marker></defs>
+      </svg>
+      <div class="cap">Replication factor 3: three independent copies of every block.</div>
+    </div>
+
+    <h3>Rack awareness</h3>
+    <p>A cluster is organised into <b>racks</b> (machines sharing a switch/power). If all three replicas
+      sat in one rack, a rack failure would lose the block; spreading them costs cross-rack bandwidth. The
+      default <b>block placement policy</b> balances the two:</p>
+    <ul>
+      <li>1st replica → the writer's local node (or a random node).</li>
+      <li>2nd replica → a node on a <b>different</b> rack.</li>
+      <li>3rd replica → a <b>different node on that same second rack</b>.</li>
+    </ul>
+    <p>Result: survive a whole-rack failure, while only paying to cross the network once.</p>
+
+    <div class="fig">
+      <svg viewBox="0 0 700 200" role="img" aria-label="Rack-aware placement of three replicas">
+        <rect x="30" y="30" width="280" height="140" rx="10" fill="none" stroke="#22304d"/>
+        <text x="170" y="22" text-anchor="middle" class="lbl">Rack 1</text>
+        <rect x="390" y="30" width="280" height="140" rx="10" fill="none" stroke="#22304d"/>
+        <text x="530" y="22" text-anchor="middle" class="lbl">Rack 2</text>
+        <rect x="60"  y="70" width="100" height="46" rx="6" fill="#0d2a22" stroke="#34d399"/>
+        <text x="110" y="98" text-anchor="middle" class="lbl">node</text>
+        <rect x="180" y="70" width="100" height="46" rx="6" fill="#111c33" stroke="#22304d"/>
+        <text x="230" y="98" text-anchor="middle" class="lbl">node</text>
+        <rect x="420" y="70"  width="100" height="46" rx="6" fill="#0d2a22" stroke="#34d399"/>
+        <text x="470" y="98" text-anchor="middle" class="lbl">node</text>
+        <rect x="540" y="70"  width="100" height="46" rx="6" fill="#0d2a22" stroke="#34d399"/>
+        <text x="590" y="98" text-anchor="middle" class="lbl">node</text>
+        <text x="110" y="140" text-anchor="middle" fill="#34d399" class="lbl">replica 1</text>
+        <text x="470" y="140" text-anchor="middle" fill="#34d399" class="lbl">replica 2</text>
+        <text x="590" y="140" text-anchor="middle" fill="#34d399" class="lbl">replica 3</text>
+      </svg>
+      <div class="cap">One replica local, the other two together on a second rack: rack-failure-safe,
+        one cross-rack hop.</div>
+    </div>
+    <p class="pill">Hands-on: Lab 2</p>
+  </section>
+
+  <!-- 5. PATHS -->
+  <section id="paths">
+    <h2>5. The write &amp; read paths</h2>
+    <h3>Writing — a replication pipeline</h3>
+    <p>The client asks the NameNode to create the file and allocate a block; the NameNode returns a list
+      of DataNodes for the replicas. The client streams the block to the <em>first</em> DataNode, which
+      forwards it to the second, which forwards it to the third — a <b>pipeline</b>. Acknowledgements flow
+      back down the pipeline. The client's upstream bandwidth is used once, not three times.</p>
+    <div class="fig">
+      <svg viewBox="0 0 700 130" role="img" aria-label="Write pipeline across three DataNodes">
+        <rect x="20" y="46" width="110" height="44" rx="8" fill="#0d1a30" stroke="#38bdf8"/>
+        <text x="75" y="72" text-anchor="middle" class="tt">Client</text>
+        <g fill="#0d2a22" stroke="#34d399">
+          <rect x="200" y="46" width="120" height="44" rx="8"/>
+          <rect x="380" y="46" width="120" height="44" rx="8"/>
+          <rect x="560" y="46" width="120" height="44" rx="8"/>
+        </g>
+        <text x="260" y="72" text-anchor="middle">DN1</text>
+        <text x="440" y="72" text-anchor="middle">DN2</text>
+        <text x="620" y="72" text-anchor="middle">DN3</text>
+        <g stroke="#38bdf8" stroke-width="2" marker-end="url(#c)">
+          <line x1="130" y1="60" x2="198" y2="60"/>
+          <line x1="320" y1="60" x2="378" y2="60"/>
+          <line x1="500" y1="60" x2="558" y2="60"/>
+        </g>
+        <text x="150" y="42" class="lbl">data</text>
+        <text x="335" y="42" class="lbl">forward</text>
+        <text x="515" y="42" class="lbl">forward</text>
+        <g stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#y)">
+          <line x1="558" y1="84" x2="502" y2="84"/>
+          <line x1="378" y1="84" x2="322" y2="84"/>
+          <line x1="198" y1="84" x2="132" y2="84"/>
+        </g>
+        <text x="360" y="110" text-anchor="middle" class="lbl" fill="#fbbf24">acknowledgements flow back</text>
+        <defs>
+          <marker id="c" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#38bdf8"/></marker>
+          <marker id="y" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#fbbf24"/></marker>
+        </defs>
+      </svg>
+      <div class="cap">The write pipeline: the client sends each block once; DataNodes chain the copies.</div>
+    </div>
+    <h3>Reading — from the nearest replica</h3>
+    <p>To read, the client asks the NameNode for the block locations, then connects <b>directly</b> to a
+      DataNode holding each block — preferring the <b>closest</b> one (same node &gt; same rack &gt; another
+      rack). The NameNode is out of the data path entirely, so it never becomes a bandwidth bottleneck.</p>
+    <div class="fig">
+      <svg viewBox="0 0 700 150" role="img" aria-label="Read path">
+        <rect x="20" y="60" width="110" height="44" rx="8" fill="#0d1a30" stroke="#38bdf8"/>
+        <text x="75" y="86" text-anchor="middle" class="tt">Client</text>
+        <rect x="290" y="14" width="150" height="44" rx="8" fill="#141d38" stroke="#a78bfa"/>
+        <text x="365" y="40" text-anchor="middle">NameNode</text>
+        <g fill="#0d2a22" stroke="#34d399">
+          <rect x="300" y="96" width="120" height="40" rx="8"/>
+          <rect x="470" y="96" width="120" height="40" rx="8"/>
+        </g>
+        <text x="360" y="120" text-anchor="middle" class="lbl">DataNode</text>
+        <text x="530" y="120" text-anchor="middle" class="lbl">DataNode</text>
+        <line x1="130" y1="74" x2="288" y2="40" stroke="#38bdf8" stroke-width="2" marker-end="url(#c)"/>
+        <text x="150" y="55" class="lbl">1. block locations?</text>
+        <line x1="130" y1="86" x2="298" y2="112" stroke="#38bdf8" stroke-width="2" marker-end="url(#c)"/>
+        <text x="150" y="128" class="lbl">2. read from nearest replica</text>
+      </svg>
+      <div class="cap">Metadata from the NameNode; bytes straight from the closest DataNode.</div>
+    </div>
+    <p class="pill">Hands-on: Labs 1 &amp; 2</p>
+  </section>
+
+  <!-- 6. FAULT TOLERANCE -->
+  <section id="fault">
+    <h2>6. Fault tolerance &amp; self-healing</h2>
+    <p>Every DataNode sends a <b>heartbeat</b> to the NameNode every few seconds. If the NameNode stops
+      hearing from a node (default ~10.5&nbsp;minutes), it declares the node <b>dead</b>. Every block that
+      lived there is now <b>under-replicated</b>, so the NameNode schedules <b>re-replication</b>: it
+      instructs surviving DataNodes to copy those blocks until the replication factor is met again — with
+      no human involvement.</p>
+    <div class="fig">
+      <svg viewBox="0 0 700 180" role="img" aria-label="DataNode failure and re-replication">
+        <rect x="290" y="12" width="150" height="42" rx="8" fill="#141d38" stroke="#a78bfa"/>
+        <text x="365" y="38" text-anchor="middle">NameNode</text>
+        <g>
+          <rect x="40"  y="110" width="110" height="46" rx="8" fill="#0d2a22" stroke="#34d399"/>
+          <text x="95" y="138" text-anchor="middle" class="lbl">DN1 ✓</text>
+          <rect x="180" y="110" width="110" height="46" rx="8" fill="#0d2a22" stroke="#34d399"/>
+          <text x="235" y="138" text-anchor="middle" class="lbl">DN2 ✓</text>
+          <rect x="320" y="110" width="110" height="46" rx="8" fill="#0d2a22" stroke="#34d399"/>
+          <text x="375" y="138" text-anchor="middle" class="lbl">DN3 ✓</text>
+          <rect x="460" y="110" width="110" height="46" rx="8" fill="#2a0d0d" stroke="#f87171"/>
+          <text x="515" y="138" text-anchor="middle" class="lbl" fill="#f87171">DN4 ✗ dead</text>
+          <rect x="600" y="110" width="80" height="46" rx="8" fill="#0d2a22" stroke="#34d399"/>
+          <text x="640" y="138" text-anchor="middle" class="lbl">DN5</text>
+        </g>
+        <line x1="515" y1="108" x2="400" y2="56" stroke="#f87171" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <text x="470" y="90" class="lbl" fill="#f87171">missed heartbeats</text>
+        <line x1="360" y1="56" x2="620" y2="108" stroke="#38bdf8" stroke-width="2" marker-end="url(#c)"/>
+        <text x="470" y="46" class="lbl" fill="#38bdf8">re-replicate block → DN5</text>
+      </svg>
+      <div class="cap">A dead node's blocks are copied onto a survivor until full replication is restored.</div>
+    </div>
+    <h3>Safemode</h3>
+    <p>On startup the NameNode enters <b>safemode</b> — a read-only state. It loads its metadata and waits
+      for DataNodes to report enough block replicas before it will serve writes. This prevents the
+      NameNode from wrongly "fixing" replication before it has heard from the cluster.</p>
+    <p class="pill">Hands-on: Lab 3</p>
+  </section>
+
+  <!-- 7. METADATA -->
+  <section id="metadata">
+    <h2>7. Metadata durability: fsimage + edit log</h2>
+    <p>The namespace lives in the NameNode's RAM for speed, but must survive restarts. HDFS persists it
+      with <b>two</b> files, not one:</p>
+    <ul>
+      <li><b><code>fsimage</code></b> — a <b>checkpoint</b>: a full snapshot of the namespace at a point in
+        time.</li>
+      <li><b>edit log</b> (<code>edits</code>) — an append-only <b>journal</b> of every change made
+        <em>since</em> that snapshot.</li>
+    </ul>
+    <p>Rewriting a full snapshot on every change would be far too slow, so the NameNode just
+      <b>appends</b> each change to the edit log. On restart it loads the last <code>fsimage</code> and
+      <b>replays</b> the edit log to reconstruct the current state. Periodically a <b>checkpoint</b> merges
+      the two into a fresh, larger <code>fsimage</code> so the edit log doesn't grow without bound (done by
+      a Secondary or Standby NameNode, or by hand with <code>hdfs dfsadmin -saveNamespace</code>).</p>
+    <div class="fig">
+      <svg viewBox="0 0 700 150" role="img" aria-label="fsimage plus edit log merge into a new fsimage">
+        <rect x="30" y="50" width="150" height="50" rx="8" fill="#141d38" stroke="#a78bfa"/>
+        <text x="105" y="72" text-anchor="middle">fsimage</text>
+        <text x="105" y="90" text-anchor="middle" class="lbl">snapshot</text>
+        <text x="205" y="82" text-anchor="middle" class="tt">+</text>
+        <rect x="230" y="50" width="180" height="50" rx="8" fill="#0d2a22" stroke="#34d399"/>
+        <text x="320" y="72" text-anchor="middle">edit log</text>
+        <text x="320" y="90" text-anchor="middle" class="lbl">journal of changes</text>
+        <line x1="410" y1="75" x2="500" y2="75" stroke="#38bdf8" stroke-width="2" marker-end="url(#c)"/>
+        <text x="455" y="66" text-anchor="middle" class="lbl">checkpoint</text>
+        <rect x="510" y="45" width="170" height="60" rx="8" fill="#141d38" stroke="#a78bfa"/>
+        <text x="595" y="70" text-anchor="middle">new fsimage</text>
+        <text x="595" y="90" text-anchor="middle" class="lbl">edit log resets</text>
+      </svg>
+      <div class="cap">Snapshot + journal = the classic durable-metadata pattern (like a database).</div>
+    </div>
+    <p class="pill">Hands-on: Lab 4</p>
+  </section>
+
+  <!-- 8. INTERFACES -->
+  <section id="interfaces">
+    <h2>8. Interfaces: the FS shell &amp; WebHDFS</h2>
+    <p>The everyday interface is the <b>FS shell</b>, a familiar set of POSIX-like commands:</p>
+    <pre><code>hdfs dfs -mkdir -p /data/input
+hdfs dfs -put local.csv /data/input/
+hdfs dfs -ls  /data/input
+hdfs dfs -cat /data/input/local.csv
+hdfs dfs -get /data/input/local.csv ./copy.csv
+hdfs dfs -rm  /data/input/local.csv</code></pre>
+    <p>For programs that don't speak HDFS's native RPC, <b>WebHDFS</b> exposes the whole filesystem as an
+      HTTP REST API — usable from <code>curl</code> or any language:</p>
+    <pre><code># list a directory as JSON
+curl 'http://namenode:9870/webhdfs/v1/data/input?op=LISTSTATUS'
+# create a file (the NameNode 307-redirects the upload to a DataNode)
+curl -L -X PUT -T local.csv 'http://namenode:9870/webhdfs/v1/data/input/local.csv?op=CREATE'</code></pre>
+    <p class="pill">Hands-on: Labs 1 &amp; 5</p>
+  </section>
+
+  <!-- 9. SPACE -->
+  <section id="space">
+    <h2>9. Quotas, trash &amp; permissions</h2>
+    <div class="cards">
+      <div class="card"><b>Quotas.</b> A directory can be capped by a <b>name quota</b> (max number of
+        files+dirs) and/or a <b>space quota</b> (max bytes, counting replication). Exceeding either makes
+        the write fail — a guardrail so one team can't fill the cluster.</div>
+      <div class="card"><b>Trash.</b> With <code>fs.trash.interval&gt;0</code>, <code>hdfs dfs -rm</code>
+        <em>moves</em> a file to a per-user <code>.Trash</code> folder instead of deleting it, so mistakes
+        are recoverable until it's purged. <code>-skipTrash</code> forces immediate deletion.</div>
+      <div class="card"><b>Permissions.</b> HDFS has a POSIX-like model (owner/group/other, r/w/x) plus
+        optional ACLs — enough for multi-tenant access control.</div>
+      <div class="card"><b>Snapshots.</b> A directory can be snapshotted for point-in-time, read-only
+        recovery of its contents — cheap because it only records differences.</div>
+    </div>
+    <p class="pill">Hands-on: Lab 5</p>
+  </section>
+
+  <!-- 10. SCALE -->
+  <section id="scale">
+    <h2>10. Availability &amp; scaling out</h2>
+    <h3>High Availability (HA)</h3>
+    <p>A single NameNode is a <b>single point of failure</b>: if it dies, the whole filesystem is
+      unavailable. HA runs <b>two</b> NameNodes — one <b>active</b>, one <b>standby</b>:</p>
+    <ul>
+      <li>A <b>JournalNode quorum</b> holds a shared edit log; the active writes to it, the standby reads
+        from it, staying in sync.</li>
+      <li><b>ZooKeeper</b> plus a <b>ZKFC</b> (failover controller) beside each NameNode detect the
+        active's death and <b>automatically promote</b> the standby. <b>Fencing</b> ensures the old active
+        can't keep acting (no "split brain").</li>
+    </ul>
+    <div class="fig">
+      <svg viewBox="0 0 700 210" role="img" aria-label="HA topology">
+        <rect x="280" y="8" width="140" height="38" rx="8" fill="#241f0d" stroke="#fbbf24"/>
+        <text x="350" y="32" text-anchor="middle" class="lbl" fill="#fbbf24">ZooKeeper (election)</text>
+        <rect x="70"  y="70" width="150" height="52" rx="8" fill="#141d38" stroke="#a78bfa"/>
+        <text x="145" y="92" text-anchor="middle">NameNode nn1</text>
+        <text x="145" y="110" text-anchor="middle" class="lbl" fill="#34d399">ACTIVE + ZKFC</text>
+        <rect x="480" y="70" width="150" height="52" rx="8" fill="#141d38" stroke="#a78bfa"/>
+        <text x="555" y="92" text-anchor="middle">NameNode nn2</text>
+        <text x="555" y="110" text-anchor="middle" class="lbl">STANDBY + ZKFC</text>
+        <line x1="220" y1="86" x2="278" y2="40" stroke="#fbbf24" stroke-dasharray="4 3"/>
+        <line x1="480" y1="86" x2="422" y2="40" stroke="#fbbf24" stroke-dasharray="4 3"/>
+        <rect x="230" y="150" width="240" height="44" rx="8" fill="#0d2a22" stroke="#34d399"/>
+        <text x="350" y="170" text-anchor="middle" class="lbl">JournalNode quorum (jn1 jn2 jn3)</text>
+        <text x="350" y="187" text-anchor="middle" class="lbl">shared edit log</text>
+        <line x1="180" y1="122" x2="300" y2="150" stroke="#38bdf8" stroke-width="2" marker-end="url(#c)"/>
+        <text x="180" y="145" class="lbl" fill="#38bdf8">writes edits</text>
+        <line x1="470" y1="160" x2="520" y2="122" stroke="#38bdf8" stroke-width="2" marker-end="url(#c)"/>
+        <text x="500" y="150" class="lbl" fill="#38bdf8">reads edits</text>
+      </svg>
+      <div class="cap">Active/standby NameNodes stay in lock-step through the shared journal; ZooKeeper +
+        ZKFC handle automatic, fenced failover.</div>
+    </div>
+    <h3>Federation</h3>
+    <p>One NameNode's RAM caps how much namespace it can hold. <b>Federation</b> runs several independent
+      NameNodes, each owning a slice of the namespace, all sharing the same pool of DataNodes — scaling
+      metadata capacity horizontally. (HA and Federation are orthogonal and often combined.)</p>
+    <p class="pill">Hands-on: Lab 6</p>
+  </section>
+
+  <!-- 11. LIMITS -->
+  <section id="limits">
+    <h2>11. Limitations: when NOT to use HDFS</h2>
+    <table>
+      <tr><th>Anti-pattern</th><th>Why it hurts</th></tr>
+      <tr><td><b>Millions of tiny files</b></td><td>Each file/block is an in-RAM entry on the NameNode.
+        Many small files exhaust the master's memory long before they fill the disks. Bundle them
+        (e.g. sequence/Har/Parquet files) instead.</td></tr>
+      <tr><td><b>Low-latency single-record reads</b></td><td>HDFS optimises for throughput on large
+        streaming reads, not millisecond point lookups. Use a database/key-value store (e.g. HBase on top
+        of HDFS) for that.</td></tr>
+      <tr><td><b>Frequent in-place edits</b></td><td>HDFS is write-once / append-only. There is no random
+        in-place update of file contents.</td></tr>
+      <tr><td><b>Many concurrent writers to one file</b></td><td>A file has a single writer at a time; HDFS
+        is not built for many-writer concurrency to the same file.</td></tr>
+    </table>
+  </section>
+
+  <!-- 12. LAB MAP -->
+  <section id="labmap">
+    <h2>12. Concept → Lab map</h2>
+    <p>Each lab in this project makes one set of these ideas tangible. Start each with
+      <code>make up</code>, run <code>make demo</code>, then prove it with <code>make verify</code>.</p>
+    <table>
+      <tr><th>Lab</th><th>Concepts it demonstrates</th></tr>
+      <tr><td><b>Lab 1</b> — Cluster basics</td><td>NameNode vs DataNode roles (§2), the namespace, the FS
+        shell (§8)</td></tr>
+      <tr><td><b>Lab 2</b> — Blocks &amp; replication</td><td>Block splitting (§3), replication factor &amp;
+        placement (§4), the write/read paths (§5)</td></tr>
+      <tr><td><b>Lab 3</b> — DataNode failure</td><td>Heartbeats, dead-node detection, automatic
+        re-replication, safemode (§6)</td></tr>
+      <tr><td><b>Lab 4</b> — NameNode metadata</td><td><code>fsimage</code> + edit log, safemode,
+        checkpointing (§7)</td></tr>
+      <tr><td><b>Lab 5</b> — WebHDFS, quotas, trash</td><td>REST interface (§8), quotas, trash (§9)</td></tr>
+      <tr><td><b>Lab 6</b> — High Availability</td><td>Active/standby NameNodes, JournalNodes, ZooKeeper +
+        ZKFC automatic failover (§10)</td></tr>
+    </table>
+    <footer>
+      Built for the <b>dehdfs</b> project · fully offline (no external assets) · facts follow the Apache
+      Hadoop / HDFS architecture and the original GFS design lineage. Diagrams are simplified for clarity.
+    </footer>
+  </section>
+</main>
+</div>
+</body>
+</html>

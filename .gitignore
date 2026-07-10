@@ -1,0 +1,4 @@
+# Local scratch produced by demos/verification
+**/tmp/
+*.local
+.DS_Store
