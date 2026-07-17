@@ -1,0 +1,137 @@
+# Lab 7 — Hive Metastore + Parquet tables on HDFS.
+# HDFS (1 NameNode + 1 DataNode) + a Postgres-backed Hive Metastore + HiveServer2.
+# A table = schema kept in the metastore + a directory of Parquet files in HDFS.
+
+name: dehdfs-lab7
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab7-namenode
+    hostname: namenode
+    environment:
+      - CLUSTER_NAME=dehdfs-lab7
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9870:9870"   # NameNode web UI
+      - "9000:9000"   # NameNode RPC
+    volumes:
+      - namenode:/hadoop/dfs/name
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab7-datanode
+    hostname: datanode
+    depends_on:
+      - namenode
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9864:9864"   # DataNode web UI
+    volumes:
+      - datanode:/hadoop/dfs/data
+
+  hive-metastore-postgresql:
+    image: bde2020/hive-metastore-postgresql:2.3.0
+    container_name: dehdfs-lab7-metastore-db
+    hostname: hive-metastore-postgresql
+    healthcheck:
+      # The bde2020 Postgres image has no built-in healthcheck; probe the port so
+      # `make up` (which waits for every container to report healthy) can see it.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/5432' 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    volumes:
+      - metastore_db:/var/lib/postgresql/data
+
+  hive-metastore:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name: dehdfs-lab7-hive-metastore
+    hostname: hive-metastore
+    command: /opt/hive/bin/hive --service metastore
+    depends_on:
+      - namenode
+      - datanode
+      - hive-metastore-postgresql
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870 datanode:9864 hive-metastore-postgresql:5432
+    env_file:
+      - ./hadoop.env
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/9083' 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
+  hive-server:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name: dehdfs-lab7-hive-server
+    hostname: hive-server
+    depends_on:
+      - hive-metastore
+    environment:
+      - SERVICE_PRECONDITION=hive-metastore:9083
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "10000:10000"   # HiveServer2 JDBC/Thrift (beeline)
+      - "10002:10002"   # HiveServer2 web UI
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/10000' 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+
+  # Hue's own metadata store. Hue MUST run on a transactional RDBMS; its default embedded
+  # SQLite throws "You can't execute queries until the end of the 'atomic' block".
+  hue-postgres:
+    image: postgres:12
+    container_name: dehdfs-lab7-hue-postgres
+    hostname: hue-postgres
+    environment:
+      - POSTGRES_USER=hue
+      - POSTGRES_PASSWORD=hue
+      - POSTGRES_DB=hue
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hue"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    volumes:
+      - hue_db:/var/lib/postgresql/data
+
+  hue:
+    image: gethue/hue:latest
+    container_name: dehdfs-lab7-hue
+    hostname: hue
+    depends_on:
+      hue-postgres:
+        condition: service_healthy
+      hive-server:
+        condition: service_healthy
+    ports:
+      - "8888:8888"   # Hue web SQL editor
+    volumes:
+      - ./config/hue.ini:/usr/share/hue/desktop/conf/z-hue.ini:ro
+    healthcheck:
+      # Probe the port with Hue's own venv Python (bare `python` isn't on PATH in this image).
+      # Only reports healthy after the image's startup `hue migrate` finishes.
+      test: ["CMD-SHELL", "/usr/share/hue/build/env/bin/python -c 'import socket; socket.create_connection((\"127.0.0.1\",8888),2)' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+      start_period: 60s
+
+volumes:
+  namenode:
+  datanode:
+  metastore_db:
+  hue_db:

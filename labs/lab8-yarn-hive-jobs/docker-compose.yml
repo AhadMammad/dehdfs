@@ -1,0 +1,193 @@
+# Lab 8 — the same Parquet write as Lab 7, but executed on YARN.
+# Lab 7's stack (HDFS + Postgres metastore + HiveServer2) PLUS the YARN compute layer:
+# a ResourceManager scheduling MapReduce work onto two NodeManagers, with a JobHistory server.
+
+name: dehdfs-lab8
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab8-namenode
+    hostname: namenode
+    environment:
+      - CLUSTER_NAME=dehdfs-lab8
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - namenode:/hadoop/dfs/name
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab8-datanode
+    hostname: datanode
+    depends_on:
+      - namenode
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9864:9864"
+    volumes:
+      - datanode:/hadoop/dfs/data
+
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab8-resourcemanager
+    hostname: resourcemanager
+    depends_on:
+      - namenode
+      - datanode
+    environment:
+      - SERVICE_PRECONDITION=namenode:9000 namenode:9870 datanode:9864
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "8088:8088"   # ResourceManager web UI — watch jobs here
+
+  nodemanager1:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab8-nodemanager1
+    hostname: nodemanager1
+    depends_on:
+      - resourcemanager
+    environment:
+      - SERVICE_PRECONDITION=namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "8042:8042"   # NodeManager 1 web UI
+
+  nodemanager2:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab8-nodemanager2
+    hostname: nodemanager2
+    depends_on:
+      - resourcemanager
+    environment:
+      - SERVICE_PRECONDITION=namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "8043:8042"   # NodeManager 2 web UI (host 8043 -> container 8042)
+
+  historyserver:
+    image: bde2020/hadoop-historyserver:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab8-historyserver
+    hostname: historyserver
+    depends_on:
+      - resourcemanager
+    environment:
+      - SERVICE_PRECONDITION=namenode:9000 namenode:9870 datanode:9864 resourcemanager:8088
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "8188:8188"   # JobHistory / timeline web UI
+    volumes:
+      - historyserver:/hadoop/yarn/timeline
+
+  hive-metastore-postgresql:
+    image: bde2020/hive-metastore-postgresql:2.3.0
+    container_name: dehdfs-lab8-metastore-db
+    hostname: hive-metastore-postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/5432' 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    volumes:
+      - metastore_db:/var/lib/postgresql/data
+
+  hive-metastore:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name: dehdfs-lab8-hive-metastore
+    hostname: hive-metastore
+    command: /opt/hive/bin/hive --service metastore
+    depends_on:
+      - namenode
+      - datanode
+      - hive-metastore-postgresql
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870 datanode:9864 hive-metastore-postgresql:5432
+    env_file:
+      - ./hadoop.env
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/9083' 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
+  hive-server:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name: dehdfs-lab8-hive-server
+    hostname: hive-server
+    depends_on:
+      - hive-metastore
+      - resourcemanager
+    environment:
+      # hive-server submits the INSERT job to YARN, so it waits on the ResourceManager too.
+      - SERVICE_PRECONDITION=hive-metastore:9083 resourcemanager:8088
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "10000:10000"
+      - "10002:10002"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/10000' 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+
+  # Hue's own metadata store. Hue MUST run on a transactional RDBMS; its default embedded
+  # SQLite throws "You can't execute queries until the end of the 'atomic' block".
+  hue-postgres:
+    image: postgres:12
+    container_name: dehdfs-lab8-hue-postgres
+    hostname: hue-postgres
+    environment:
+      - POSTGRES_USER=hue
+      - POSTGRES_PASSWORD=hue
+      - POSTGRES_DB=hue
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hue"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    volumes:
+      - hue_db:/var/lib/postgresql/data
+
+  hue:
+    image: gethue/hue:latest
+    container_name: dehdfs-lab8-hue
+    hostname: hue
+    depends_on:
+      hue-postgres:
+        condition: service_healthy
+      hive-server:
+        condition: service_healthy
+    ports:
+      - "8888:8888"   # Hue web SQL editor (queries run as YARN jobs)
+    volumes:
+      - ./config/hue.ini:/usr/share/hue/desktop/conf/z-hue.ini:ro
+    healthcheck:
+      # Probe the port with Hue's own venv Python (bare `python` isn't on PATH in this image).
+      # Only reports healthy after the image's startup `hue migrate` finishes.
+      test: ["CMD-SHELL", "/usr/share/hue/build/env/bin/python -c 'import socket; socket.create_connection((\"127.0.0.1\",8888),2)' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 40
+      start_period: 60s
+
+volumes:
+  namenode:
+  datanode:
+  metastore_db:
+  historyserver:
+  hue_db:

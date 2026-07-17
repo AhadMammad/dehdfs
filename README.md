@@ -1,7 +1,7 @@
 # dehdfs — Learn HDFS by Running It
 
 A self-contained, Docker Compose–based learning resource for the **Hadoop Distributed File System
-(HDFS)**. It pairs a fact-based, fully-offline explainer with **six hands-on labs**, each with its own
+(HDFS)**. It pairs a fact-based, fully-offline explainer with **eight hands-on labs**, each with its own
 Compose stack, `Makefile`, and an automated `make verify` that proves the lab does what it claims.
 
 > HDFS is the storage layer that made "big data" practical: it stores enormous files reliably across a
@@ -18,7 +18,7 @@ Compose stack, `Makefile`, and an automated `make verify` that proves the lab do
   make docs        # prints the path; open it in your browser
   ```
 
-- **`labs/`** — six independent labs. Each is a separate Compose project you can start, explore,
+- **`labs/`** — eight independent labs. Each is a separate Compose project you can start, explore,
   verify, and tear down on its own.
 
 ## Prerequisites
@@ -30,7 +30,7 @@ Compose stack, `Makefile`, and an automated `make verify` that proves the lab do
 Verified working with Docker 24.x and Compose v2.20. The `bde2020/hadoop` images are `amd64`; on Apple
 Silicon they run under emulation (slower but fine).
 
-## The six labs
+## The eight labs
 
 | # | Lab | What you learn | Key command to see it |
 |---|-----|----------------|-----------------------|
@@ -40,6 +40,8 @@ Silicon they run under emulation (slower but fine).
 | 4 | [NameNode metadata](labs/lab4-namenode-metadata/) | `fsimage` + edit log, safemode, checkpointing | `hdfs dfsadmin -saveNamespace`, `hdfs oiv` |
 | 5 | [WebHDFS, quotas & trash](labs/lab5-webhdfs-quotas-trash/) | The HTTP REST API, space/name quotas, the `.Trash` safety net | `curl .../webhdfs/v1/...` |
 | 6 | [High Availability](labs/lab6-high-availability/) | Active/standby NameNodes, JournalNode quorum, ZooKeeper + ZKFC failover | kill the active NameNode, watch failover |
+| 7 | [Hive Metastore & Parquet](labs/lab7-hive-metastore-parquet/) | A table = a metastore schema + Parquet files in HDFS; columnar storage | `CREATE TABLE ... STORED AS PARQUET`, then `hdfs dfs -ls /user/hive/warehouse` |
+| 8 | [The same write, on YARN](labs/lab8-yarn-hive-jobs/) | ResourceManager/NodeManagers run the Parquet write as a distributed job | watch the INSERT job at `:8088` |
 
 ## Standard per-lab workflow
 

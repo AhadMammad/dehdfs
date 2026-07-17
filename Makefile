@@ -1,4 +1,4 @@
-# dehdfs — root Makefile. Orchestrates the six labs.
+# dehdfs — root Makefile. Orchestrates the eight labs.
 # Individual labs live in labs/*/ and each has its own Makefile with the same targets.
 
 LABS := lab1-cluster-basics \
@@ -6,7 +6,9 @@ LABS := lab1-cluster-basics \
         lab3-datanode-failure \
         lab4-namenode-metadata \
         lab5-webhdfs-quotas-trash \
-        lab6-high-availability
+        lab6-high-availability \
+        lab7-hive-metastore-parquet \
+        lab8-yarn-hive-jobs
 
 DOCS := $(abspath docs/index.html)
 
