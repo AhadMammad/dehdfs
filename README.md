@@ -1,7 +1,7 @@
 # dehdfs — Learn HDFS by Running It
 
 A self-contained, Docker Compose–based learning resource for the **Hadoop Distributed File System
-(HDFS)**. It pairs a fact-based, fully-offline explainer with **eight hands-on labs**, each with its own
+(HDFS)**. It pairs a fact-based, fully-offline explainer with **eighteen hands-on labs**, each with its own
 Compose stack, `Makefile`, and an automated `make verify` that proves the lab does what it claims.
 
 > HDFS is the storage layer that made "big data" practical: it stores enormous files reliably across a
@@ -18,7 +18,7 @@ Compose stack, `Makefile`, and an automated `make verify` that proves the lab do
   make docs        # prints the path; open it in your browser
   ```
 
-- **`labs/`** — eight independent labs. Each is a separate Compose project you can start, explore,
+- **`labs/`** — eighteen independent labs. Each is a separate Compose project you can start, explore,
   verify, and tear down on its own.
 
 ## Prerequisites
@@ -30,7 +30,7 @@ Compose stack, `Makefile`, and an automated `make verify` that proves the lab do
 Verified working with Docker 24.x and Compose v2.20. The `bde2020/hadoop` images are `amd64`; on Apple
 Silicon they run under emulation (slower but fine).
 
-## The eight labs
+## The eighteen labs
 
 | # | Lab | What you learn | Key command to see it |
 |---|-----|----------------|-----------------------|
@@ -42,6 +42,16 @@ Silicon they run under emulation (slower but fine).
 | 6 | [High Availability](labs/lab6-high-availability/) | Active/standby NameNodes, JournalNode quorum, ZooKeeper + ZKFC failover | kill the active NameNode, watch failover |
 | 7 | [Hive Metastore & Parquet](labs/lab7-hive-metastore-parquet/) | A table = a metastore schema + Parquet files in HDFS; columnar storage | `CREATE TABLE ... STORED AS PARQUET`, then `hdfs dfs -ls /user/hive/warehouse` |
 | 8 | [The same write, on YARN](labs/lab8-yarn-hive-jobs/) | ResourceManager/NodeManagers run the Parquet write as a distributed job | watch the INSERT job at `:8088` |
+| 9 | [Erasure coding](labs/lab9-erasure-coding/) | Striped data + parity vs 3× replication — same safety, ~1.67× storage | `hdfs ec -setPolicy`, compare `hdfs dfs -du` |
+| 10 | [Snapshots](labs/lab10-snapshots/) | Cheap point-in-time directory images; recover deleted files | `hdfs dfs -createSnapshot`, restore from `.snapshot/` |
+| 11 | [Permissions & ACLs](labs/lab11-permissions-acls/) | POSIX owner/group/other bits plus extended per-user ACLs | `hdfs dfs -setfacl -m user:bob:r-x` |
+| 12 | [Rack awareness](labs/lab12-rack-awareness/) | A topology script; replicas spread across racks | `hdfs dfsadmin -printTopology`, `fsck -locations` |
+| 13 | [Bucketing](labs/lab13-bucketing/) | Hashing a column into a fixed set of files; sampling & joins | `CLUSTERED BY (id) INTO 8 BUCKETS`, `TABLESAMPLE` |
+| 14 | [ACID transactions](labs/lab14-acid-transactions/) | UPDATE/DELETE via delta files + compaction on transactional ORC | `UPDATE`/`DELETE`, `ALTER TABLE … COMPACT` |
+| 15 | [Formats & schema evolution](labs/lab15-formats-schema-evolution/) | Avro vs Parquet/ORC, compression codecs, adding columns | `STORED AS AVRO`, `ALTER TABLE … ADD COLUMNS` |
+| 16 | [External vs managed](labs/lab16-external-vs-managed/) | What `DROP TABLE` does to the data in HDFS | `DROP` a managed vs an external table |
+| 17 | [Trino over the metastore](labs/lab17-trino-metastore/) | An MPP engine querying the same tables from HDFS, no MapReduce | `trino --catalog hive`, watch `:8080` |
+| 18 | [Spark SQL](labs/lab18-spark-sql/) | Spark reading/writing the same Hive warehouse over HDFS | `spark-sql` reads/writes the shared metastore |
 
 ## Standard per-lab workflow
 

@@ -1,0 +1,112 @@
+# Lab 17 — Trino over the Hive metastore: HDFS + metastore + HiveServer2 + Trino.
+
+name: dehdfs-lab17
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab17-namenode
+    hostname: namenode
+    environment:
+      - CLUSTER_NAME=dehdfs-lab17
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - namenode:/hadoop/dfs/name
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab17-datanode
+    hostname: datanode
+    depends_on:
+      - namenode
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9864:9864"
+    volumes:
+      - datanode:/hadoop/dfs/data
+
+  hive-metastore-postgresql:
+    image: bde2020/hive-metastore-postgresql:2.3.0
+    container_name: dehdfs-lab17-metastore-db
+    hostname: hive-metastore-postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/5432' 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    volumes:
+      - metastore_db:/var/lib/postgresql/data
+
+  hive-metastore:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name: dehdfs-lab17-hive-metastore
+    hostname: hive-metastore
+    command: /opt/hive/bin/hive --service metastore
+    depends_on:
+      - namenode
+      - datanode
+      - hive-metastore-postgresql
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870 datanode:9864 hive-metastore-postgresql:5432
+    env_file:
+      - ./hadoop.env
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/9083' 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
+  hive-server:
+    image: bde2020/hive:2.3.2-postgresql-metastore
+    container_name: dehdfs-lab17-hive-server
+    hostname: hive-server
+    depends_on:
+      - hive-metastore
+    environment:
+      - SERVICE_PRECONDITION=hive-metastore:9083
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "10000:10000"
+      - "10002:10002"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/10000' 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+
+  trino:
+    image: trinodb/trino:398
+    container_name: dehdfs-lab17-trino
+    hostname: trino
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+      namenode:
+        condition: service_healthy
+    ports:
+      - "8080:8080"   # Trino web UI + client endpoint
+    volumes:
+      - ./config/catalog/hive.properties:/etc/trino/catalog/hive.properties:ro
+    healthcheck:
+      # Healthy only once the engine actually answers a query.
+      test: ["CMD-SHELL", "trino --execute 'SELECT 1' >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 40
+      start_period: 40s
+
+volumes:
+  namenode:
+  datanode:
+  metastore_db:

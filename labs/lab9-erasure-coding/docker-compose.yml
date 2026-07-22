@@ -1,0 +1,79 @@
+# Lab 9 — erasure coding: one NameNode + SIX DataNodes.
+# RS-3-2 erasure coding needs at least 5 DataNodes (3 data + 2 parity); 6 gives headroom.
+
+name: dehdfs-lab9
+
+x-datanode: &datanode
+  image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+  env_file:
+    - ./hadoop.env
+  environment:
+    - SERVICE_PRECONDITION=namenode:9870
+  depends_on:
+    - namenode
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab9-namenode
+    hostname: namenode
+    environment:
+      - CLUSTER_NAME=dehdfs-lab9
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - namenode:/hadoop/dfs/name
+
+  datanode1:
+    <<: *datanode
+    container_name: dehdfs-lab9-datanode1
+    hostname: datanode1
+    volumes:
+      - datanode1:/hadoop/dfs/data
+
+  datanode2:
+    <<: *datanode
+    container_name: dehdfs-lab9-datanode2
+    hostname: datanode2
+    volumes:
+      - datanode2:/hadoop/dfs/data
+
+  datanode3:
+    <<: *datanode
+    container_name: dehdfs-lab9-datanode3
+    hostname: datanode3
+    volumes:
+      - datanode3:/hadoop/dfs/data
+
+  datanode4:
+    <<: *datanode
+    container_name: dehdfs-lab9-datanode4
+    hostname: datanode4
+    volumes:
+      - datanode4:/hadoop/dfs/data
+
+  datanode5:
+    <<: *datanode
+    container_name: dehdfs-lab9-datanode5
+    hostname: datanode5
+    volumes:
+      - datanode5:/hadoop/dfs/data
+
+  datanode6:
+    <<: *datanode
+    container_name: dehdfs-lab9-datanode6
+    hostname: datanode6
+    volumes:
+      - datanode6:/hadoop/dfs/data
+
+volumes:
+  namenode:
+  datanode1:
+  datanode2:
+  datanode3:
+  datanode4:
+  datanode5:
+  datanode6:

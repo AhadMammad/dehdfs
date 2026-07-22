@@ -1,0 +1,87 @@
+# Lab 12 — rack awareness: 1 NameNode + 4 DataNodes across 2 racks.
+# DataNodes get static IPs so the topology script can map them to racks deterministically.
+
+name: dehdfs-lab12
+
+x-datanode: &datanode
+  image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+  env_file:
+    - ./hadoop.env
+  environment:
+    - SERVICE_PRECONDITION=namenode:9870
+  depends_on:
+    - namenode
+
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: dehdfs-lab12-namenode
+    hostname: namenode
+    environment:
+      - CLUSTER_NAME=dehdfs-lab12
+    env_file:
+      - ./hadoop.env
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - namenode:/hadoop/dfs/name
+      # The NameNode runs this script to resolve each DataNode's rack.
+      - ./config/topology.sh:/etc/hadoop/topology.sh:ro
+    networks:
+      dehdfs:
+        ipv4_address: 172.28.0.10
+
+  datanode1:
+    <<: *datanode
+    container_name: dehdfs-lab12-datanode1
+    hostname: datanode1
+    volumes:
+      - datanode1:/hadoop/dfs/data
+    networks:
+      dehdfs:
+        ipv4_address: 172.28.1.1
+
+  datanode2:
+    <<: *datanode
+    container_name: dehdfs-lab12-datanode2
+    hostname: datanode2
+    volumes:
+      - datanode2:/hadoop/dfs/data
+    networks:
+      dehdfs:
+        ipv4_address: 172.28.1.2
+
+  datanode3:
+    <<: *datanode
+    container_name: dehdfs-lab12-datanode3
+    hostname: datanode3
+    volumes:
+      - datanode3:/hadoop/dfs/data
+    networks:
+      dehdfs:
+        ipv4_address: 172.28.2.1
+
+  datanode4:
+    <<: *datanode
+    container_name: dehdfs-lab12-datanode4
+    hostname: datanode4
+    volumes:
+      - datanode4:/hadoop/dfs/data
+    networks:
+      dehdfs:
+        ipv4_address: 172.28.2.2
+
+networks:
+  dehdfs:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  namenode:
+  datanode1:
+  datanode2:
+  datanode3:
+  datanode4:
